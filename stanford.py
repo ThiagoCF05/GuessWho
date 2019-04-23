@@ -2,37 +2,53 @@ __author__ = 'thiagocastroferreira'
 
 import json
 
-from stanford_corenlp_pywrapper import CoreNLP
+from stanfordcorenlp import StanfordCoreNLP
+
+STANFORD_PATH=r'/home/tcastrof/workspace/stanford/stanford-corenlp-full-2018-02-27'
 
 if __name__ == '__main__':
-    proc = CoreNLP('parse')
+    props={'annotators': 'tokenize,ssplit,pos,lemma,parse','pipelineLanguage':'en','outputFormat':'json'}
+    corenlp = StanfordCoreNLP(STANFORD_PATH)
 
-    faces = json.load(open('../Guess-who-dataset/face-rating-data.json'))
-    guesses = json.load(open('../Guess-who-dataset/guess-who-data.json'))
+    faces = json.load(open('dataset/face-rating-data-2.json'))
+    guesses = json.load(open('dataset/guess-who-data-2.json'))
 
     for guess in guesses:
         if guess['actionType'] == 'questionAsked':
-            out = proc.parse_doc(guess['question'].replace('[comma]', ','))
+            out = corenlp.annotate(guess['question'].replace('[comma]', ','), properties=props)
+            parsed = json.loads(out)
             guess['nlp'] = {}
-            if len(out['sentences']) > 0:
-                guess['nlp']['tokens'] = out['sentences'][0]['tokens']
-                guess['nlp']['pos_tag'] = out['sentences'][0]['pos']
-                guess['nlp']['parse'] = out['sentences'][0]['parse']
-            else:
-                guess['nlp']['tokens'] = []
-                guess['nlp']['pos_tag'] = []
-                guess['nlp']['parse'] = ''
+
+            tokens, pos_tag, tree = [], [], ''
+            for sentence in out['sentences']:
+                tokens.extend([w['originalText'] for w in sentence['tokens']])
+                pos_tag.extend([w['pos'] for w in sentence['tokens']])
+                tree += ' ' + sentence['parse']
+
+            guess['nlp']['tokens'] = tokens
+            guess['nlp']['pos_tag'] = pos_tag
+            guess['nlp']['parse'] = tree.strip()
         else:
             guess['nlp']['tokens'] = []
             guess['nlp']['pos_tag'] = []
             guess['nlp']['parse'] = ''
 
     for face in faces:
-        out = proc.parse_doc(face['responses']['description'].replace('[comma]', ','))
-        face['nlp'] = {}
-        face['nlp']['tokens'] = out['sentences'][0]['tokens']
-        face['nlp']['pos_tag'] = out['sentences'][0]['pos']
-        face['nlp']['parse'] = out['sentences'][0]['parse']
+        out = corenlp.annotate(face['responses']['description'].replace('[comma]', ','), properties=props)
+        parsed = json.loads(out)
 
-    json.dump(guesses, open('../Guess-who-dataset/guess-who-data.json', 'w'), indent=4, separators=(',', ': '))
-    json.dump(faces, open('../Guess-who-dataset/face-rating-data.json', 'w'), indent=4, separators=(',', ': '))
+        tokens, pos_tag, tree = [], [], ''
+        for sentence in out['sentences']:
+            tokens.extend([w['originalText'] for w in sentence['tokens']])
+            pos_tag.extend([w['pos'] for w in sentence['tokens']])
+            tree += ' ' + sentence['parse']
+
+        face['nlp'] = {}
+        face['nlp']['tokens'] = tokens
+        face['nlp']['pos_tag'] = pos_tag
+        face['nlp']['parse'] = tree.strip()
+
+    corenlp.close()
+
+    json.dump(guesses, open('dataset/guess-who-data-2.json', 'w'), indent=4, separators=(',', ': '))
+    json.dump(faces, open('dataset/face-rating-data-2.json', 'w'), indent=4, separators=(',', ': '))
